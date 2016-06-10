@@ -1,1 +1,0 @@
-this file exists to make sure git tracks the folder even if all the contents are ignored
