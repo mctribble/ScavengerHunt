@@ -91,104 +91,111 @@ int main()
 		//(also allows openCV to catch window events: commenting this breaks EVERYTHING, but it can be safely dropped to 1 ms)
 		waitKey(2000);
 		
-		//prompt user for a file to test against (https://msdn.microsoft.com/en-us/library/windows/desktop/ff485843%28v=vs.85%29.aspx)
-		HRESULT result = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE); //initialize COM lib
-		if (FAILED(result))
-			return ExitCodes::OPEN_FILE_DIALOG_ERROR;
-
-		//make a file dialog to present to the user
-		IFileOpenDialog* dialog;
-		result = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_ALL, IID_IFileOpenDialog, reinterpret_cast<void**>(&dialog));
-		if (FAILED(result))
+		byte strikes = 0;
+		bool matchFound = false;
+		for (; (strikes < 3) && (matchFound == false); strikes++) //main guess loop
 		{
-			CoUninitialize();
-			return ExitCodes::OPEN_FILE_DIALOG_ERROR;
-		}
-			
+			//prompt user for a file to test against (https://msdn.microsoft.com/en-us/library/windows/desktop/ff485843%28v=vs.85%29.aspx)
+			HRESULT result = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE); //initialize COM lib
+			if (FAILED(result))
+				return ExitCodes::OPEN_FILE_DIALOG_ERROR;
 
-		//present it
-		result = dialog->Show(NULL);
-		if (FAILED(result))
-		{
-			dialog->Release();
-			CoUninitialize();
-			return ExitCodes::OPEN_FILE_DIALOG_ERROR;
-		}
+			//make a file dialog to present to the user
+			IFileOpenDialog* dialog;
+			result = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_ALL, IID_IFileOpenDialog, reinterpret_cast<void**>(&dialog));
+			if (FAILED(result))
+			{
+				CoUninitialize();
+				return ExitCodes::OPEN_FILE_DIALOG_ERROR;
+			}
 
-		//get the result
-		IShellItem* shellItem;
-		result = dialog->GetResult(&shellItem);
-		if (FAILED(result))
-		{
-			dialog->Release();
-			CoUninitialize();
-			return ExitCodes::OPEN_FILE_DIALOG_ERROR;
-		}
 
-		//get the file name from it
-		wstring fileName;
-		PWSTR fileNameTemp;	//temporary buffer for the file name
-		result = shellItem->GetDisplayName(SIGDN_FILESYSPATH, &fileNameTemp); //fetch the file name
-		shellItem->Release();	//we dont need this anymore
-		dialog->Release();		//or this
-		if (FAILED(result)) 
-		{
-			CoUninitialize();
-			return ExitCodes::OPEN_FILE_DIALOG_ERROR;
-		}
-		else
-		{
-			//copy data from the temporary buffer to where we actually want it
-			fileName = fileNameTemp;
+			//present it
+			result = dialog->Show(NULL);
+			if (FAILED(result))
+			{
+				dialog->Release();
+				CoUninitialize();
+				return ExitCodes::OPEN_FILE_DIALOG_ERROR;
+			}
 
-			CoTaskMemFree(fileNameTemp); //clean up the buffer
-			CoUninitialize(); //clean up the COM lib
-		}
+			//get the result
+			IShellItem* shellItem;
+			result = dialog->GetResult(&shellItem);
+			if (FAILED(result))
+			{
+				dialog->Release();
+				CoUninitialize();
+				return ExitCodes::OPEN_FILE_DIALOG_ERROR;
+			}
 
-		//perform the test
-		wstring args = L"objectDetection \"" + wstring(sampleName.begin(), sampleName.end()) + L"\" \"" + fileName + L"\" lastMatch.png";
-		cout << "..........";
-		SHELLEXECUTEINFO ShExecInfo = { 0 };
-		ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
-		ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
-		ShExecInfo.hwnd = NULL;
-		ShExecInfo.lpVerb = NULL;
-		ShExecInfo.lpFile = L"ScreenSearch.exe";
-		ShExecInfo.lpParameters = ( args.c_str() );
-		ShExecInfo.lpDirectory = NULL;
-		ShExecInfo.nShow = SW_HIDE;
-		ShExecInfo.hInstApp = NULL;
-		ShellExecuteEx(&ShExecInfo);
-		WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
-		DWORD matchResult = -1;
-		GetExitCodeProcess(ShExecInfo.hProcess, &matchResult);
-		
-		switch (matchResult)
-		{
-		case 0:
-			//there was a successful match!
-			cout << "[MATCH]" << endl;
-			matchCount++;
-			break;
-		case 1:
-			//there was no match
-			cout << "[NO MATCH]" << endl;
-			missCount++;
-			break;
-		case 2:
-			//we passed invalid arguments to screensearch. 
-			cout << "[BAD ARGS!]" << endl;
-			throw invalid_argument("Invalid arguments sent to screensearch!");
-			break;
-		default:
-			//because all matches are given return code 0, we can assume unknown errors, whatever they are, were not a match.  
-			//Still, there should be better handling of this.  Pause to make sure the user sees it
-			cerr << "UNKNOWN RETURN VALUE!" << endl;
-			cin.get();
-			missCount++;
-			break;
-		}
+			//get the file name from it
+			wstring fileName;
+			PWSTR fileNameTemp;	//temporary buffer for the file name
+			result = shellItem->GetDisplayName(SIGDN_FILESYSPATH, &fileNameTemp); //fetch the file name
+			shellItem->Release();	//we dont need this anymore
+			dialog->Release();		//or this
+			if (FAILED(result))
+			{
+				CoUninitialize();
+				return ExitCodes::OPEN_FILE_DIALOG_ERROR;
+			}
+			else
+			{
+				//copy data from the temporary buffer to where we actually want it
+				fileName = fileNameTemp;
 
+				CoTaskMemFree(fileNameTemp); //clean up the buffer
+				CoUninitialize(); //clean up the COM lib
+			}
+
+			//perform the test
+			wstring args = L"objectDetection \"" + wstring(sampleName.begin(), sampleName.end()) + L"\" \"" + fileName + L"\" lastMatch.png";
+			cout << "..........";
+			SHELLEXECUTEINFO ShExecInfo = { 0 };
+			ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
+			ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
+			ShExecInfo.hwnd = NULL;
+			ShExecInfo.lpVerb = NULL;
+			ShExecInfo.lpFile = L"ScreenSearch.exe";
+			ShExecInfo.lpParameters = (args.c_str());
+			ShExecInfo.lpDirectory = NULL;
+			ShExecInfo.nShow = SW_HIDE;
+			ShExecInfo.hInstApp = NULL;
+			ShellExecuteEx(&ShExecInfo);
+			WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
+			DWORD matchResult = -1;
+			GetExitCodeProcess(ShExecInfo.hProcess, &matchResult);
+
+			switch (matchResult)
+			{
+			case 0:
+				//there was a successful match!
+				cout << "[MATCH]";
+				matchCount++;
+				matchFound = true;
+				break;
+			case 1:
+				//there was no match
+				cout << "[X]";
+				missCount++;
+				break;
+			case 2:
+				//we passed invalid arguments to screensearch. 
+				cout << "[BAD ARGS!]";
+				throw invalid_argument("Invalid arguments sent to screensearch!");
+				break;
+			default:
+				//because all matches are given return code 0, we can assume unknown errors, whatever they are, were not a match.  
+				//Still, there should be better handling of this.  Pause to make sure the user sees it then treat it as a regular miss.
+				cerr << "UNKNOWN RETURN VALUE!";
+				cin.clear();
+				cin.get();
+				missCount++;
+				break;
+			}
+		} //end guess loop
+		cout << endl;
 
 	} //end main game loop
 
@@ -226,7 +233,7 @@ int main()
 
 	//prompt for keypress before quitting
 	cout << endl << "Press enter to exit." << endl;
-	cin.clear(); //make sure not to accept keypresses that happened much earlier
+	cin.ignore(); //make sure not to accept keypresses that happened much earlier
 	cin.get();
 
     return exitCode;
