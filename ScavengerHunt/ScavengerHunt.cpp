@@ -69,7 +69,8 @@ int main()
 	cout << "Each round, you will be presented with an image." << endl <<
 		"Step 1: Try to find another image containg the same object or showing the same place and save it somewhere on your computer" << endl <<
 		"Step 2: Press any key to open the file dialog and navigate to the file" << endl <<
-		"Step 3: wait a few seconds and you will be told whether or not a match was found and scored accordingly" << endl << endl;
+		"Step 3: wait a few seconds and you will be told whether or not a match was found and scored accordingly" << endl <<
+		"(if no match was found, you are given two more attempts without penalty before it is counted as a miss)" << endl << endl;
 
 	//score tracking
 	unsigned int matchCount = 0;
@@ -114,9 +115,11 @@ int main()
 			result = dialog->Show(NULL);
 			if (FAILED(result))
 			{
+				//errors here tend to result from the user cancelling the dialog, so we just treat it as a miss instead of dying
 				dialog->Release();
 				CoUninitialize();
-				return ExitCodes::OPEN_FILE_DIALOG_ERROR;
+				cout << "[X]"; 
+				continue;
 			}
 
 			//get the result
@@ -151,7 +154,6 @@ int main()
 
 			//perform the test
 			wstring args = L"objectDetection \"" + wstring(sampleName.begin(), sampleName.end()) + L"\" \"" + fileName + L"\" lastMatch.png";
-			cout << "..........";
 			SHELLEXECUTEINFO ShExecInfo = { 0 };
 			ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
 			ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
@@ -163,7 +165,15 @@ int main()
 			ShExecInfo.nShow = SW_HIDE;
 			ShExecInfo.hInstApp = NULL;
 			ShellExecuteEx(&ShExecInfo);
-			WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
+
+			//wait for screenSearch to finish, with a '.' every second to indicate it is still running
+			DWORD waitResult = WAIT_TIMEOUT;
+			while (waitResult == WAIT_TIMEOUT)
+			{
+				cout << '.';
+				waitResult = WaitForSingleObject(ShExecInfo.hProcess, 1000);
+			}
+			
 			DWORD matchResult = -1;
 			GetExitCodeProcess(ShExecInfo.hProcess, &matchResult);
 
@@ -178,6 +188,7 @@ int main()
 			case 1:
 				//there was no match
 				cout << "[X]";
+				waitKey(500); //wait just a moment so user is more likely to see the [X]
 				missCount++;
 				break;
 			case 2:
@@ -198,6 +209,9 @@ int main()
 		cout << endl;
 
 	} //end main game loop
+
+	//destroy the image window since we no longer need it
+	destroyWindow("Find this");
 
 	//Scoring constants
 	float	ACCURACY_MAX_VALUE = 1000.0f;	//proportional to %accuracy
